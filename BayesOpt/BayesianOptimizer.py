@@ -8,11 +8,12 @@ from scipy.optimize import minimize, linprog
 from itertools import product
 from collections.abc import Callable
 from tqdm import tqdm
+from joblib import Parallel, delayed
 
 import scipy.stats as scis 
-from BOlite.BayesOpt.GaussianProcess import GaussianProcess
-from BOlite.BayesOpt.utils.plot import * 
-from BOlite.BayesOpt.utils.logging import *
+from BayesOpt.GaussianProcess import GaussianProcess
+from BayesOpt.utils.plot import * 
+from BayesOpt.utils.logging import *
 
 npr.seed(42)
 matplotlib.rcParams.update({
@@ -201,7 +202,8 @@ class BayesianOptimizer:
         :return EI: Expected Improvement estimate for the given input value.
         """
         assert self.surrogate.fitted is True, "Not true"
-        pred, var = self.surrogate.predict(Xstar, cholesky=True)
+        outputs = Parallel(n_jobs=8)(delayed(self.surrogate.predict)(i[np.newaxis, :]) for i in Xstar)
+        pred, var = np.array([i[0][0] for i in outputs]), np.array([i[1][0] for i in outputs])
         impr = (pred - self.y_min - eps) / var**0.5
         return (
             (pred - self.y_min - eps) * scis.norm.cdf(impr) + 
@@ -222,7 +224,8 @@ class BayesianOptimizer:
         :return PoI: Probability of Improvement estimate for the given input value.
         """
         assert self.surrogate.fitted is True, "Not true"
-        pred, var = self.surrogate.predict(Xstar, cholesky=True)
+        outputs = Parallel(n_jobs=8)(delayed(self.surrogate.predict)(i[np.newaxis, :]) for i in Xstar)
+        pred, var = np.array([i[0][0] for i in outputs]), np.array([i[1][0] for i in outputs])
         return scis.norm.cdf((pred - self.y_min - eps) / var**0.5)
 
     def _get_upper_confidence_bound(self, Xstar, eps=1) -> float:
@@ -238,18 +241,15 @@ class BayesianOptimizer:
         :return GP-UCB: UCB estimate for the given input value.  
         """
         assert self.surrogate.fitted is True, "Not true"
-        pred, var = self.surrogate.predict(Xstar, cholesky=True)
+        outputs = Parallel(n_jobs=8)(delayed(self.surrogate.predict)(i[np.newaxis, :]) for i in Xstar)
+        pred, var = np.array([i[0][0] for i in outputs]), np.array([i[1][0] for i in outputs])
         return pred - eps*var**0.5
 
     def _sobol_sample(self, num_draws, box):
         sampler = scis.qmc.Sobol(d=2, scramble=True)
         return box[0] + (box[1] - box[0]) * sampler.random(n=num_draws)
 
-
-
-# %%
 if __name__ == "__main__":
-    #----------% 3D visualization routine %----------#
     os.chdir(os.path.dirname(os.path.realpath(__file__)))
     # True minimum output (at three different input coordinate sets)
     TRUEMIN = 0.397887
@@ -263,42 +263,8 @@ if __name__ == "__main__":
         sampler = scis.qmc.Sobol(d=2, scramble=True)
         return box[0] + (box[1] - box[0]) * sampler.random(n=num_draws)
 
-    # Number of initial points, number of BO steps
-    n_init = 4
-    n_steps = 20
-
     # Input space box and initial queries + observations
     box = np.array([[-5, 0], [10, 15]])
-    xinit = sobol_sample(n_init, box)
-    yinit = branin(xinit[:, 0], xinit[:, 1])
-
-    # Instance of Bayesian Optimization. Test on smaller number of points + iters
-    bo = BayesianOptimizer(
-        surrogate=GaussianProcess(), 
-        initial_queries=xinit, 
-        initial_observations=yinit,
-        oracle=branin,
-        box=box
-    )
-    # Optimization schedule
-    optx, opty = bo.optimize(num_steps=n_steps, num_points=2**5, acquisition_fn="ei", eps=-8) 
-
-    print(f"Min. query point: {optx}")
-    print(f"Min. observation: {opty}")
-    print(f"True minimum: {TRUEMIN}")
-
-    # 3D figure of exploration, brighter colors reflect more recent queries
-    fig = plot_function(branin, box[0], box[1], 200, title="me", xlabel="this", ylabel="that")
-
-    fig = add_points(
-        x=bo.X[:, 0],
-        y=bo.X[:, 1],
-        z=bo.y,
-        num_init=n_init,
-        fig=fig
-    )
-    fig.write_html("figures/exampleBOschedule.html")
-    fig.show()
 
     #----------% Main routine %----------#
     # Setup params
@@ -354,13 +320,5 @@ if __name__ == "__main__":
             mse = np.power(tmp["y"] - TRUEMIN, 2)
         output_dict[tmp["acquisition_fn"]][tmp["eps"]] = mse
         
-    #----------% Requested Figure %----------#
+    #----------% Figure %----------#
     main_figure(output_dict)
-
-    """
-    The plot shows more exploration early in the BO schedule on higher values of epsilon. 
-    Expected Improvement quickly exploits in the vecinity of the best values found in prior
-    steps, while Probability of Improvement explores more frequently and with much larger
-    average regret results. UCB explores little even on changing parameters of epsilon, and while
-    it tallies a higher regret early on, it quickly starts to exploit around the found minimum.
-    """

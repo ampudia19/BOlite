@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import matplotlib
 from itertools import product
 from collections.abc import Callable
-from BOlite.BayesOpt.utils.plot import * 
+from BayesOpt.utils.plot import * 
+from scipy.special import gamma, kv
 
 npr.seed(42)
 matplotlib.rcParams.update({
@@ -87,6 +88,78 @@ class GaussianProcess:
         return (
             sigma_f**2 * 
             np.exp(-(1/(2*lengthscale**2)) * np.sum((xi - xj)**2)) +
+            sigma_n**2 * np.isclose(xi, xj, rtol=1e-5).all()
+        )
+    
+    @staticmethod
+    def exponential_kernel(
+        xi: float, xj: float, lengthscale: float, sigma_f: float, sigma_n: float
+    ) -> float:
+        """
+        Exponential Kernel method.
+
+        :param xi, xj: The two x values to use as kernel inputs.
+        :param lengthscale: Lengthscale parameter. Defaults to 1.
+        :param sigma_f: Signal variance parameter. Defaults to 1.
+        :param sigma_n: Noise variance parameter. Defaults to 0.1.
+
+        :return: Output k(xi,xj) given hyperparameters.
+        """
+        xi, xj = xi[np.newaxis], xj[np.newaxis]
+        return (
+            sigma_f**2 * 
+            np.exp(-(1/lengthscale) * np.sum(np.abs(xi - xj))) +
+            sigma_n**2 * np.isclose(xi, xj, rtol=1e-5).all()
+        )
+    
+    @staticmethod
+    def matern_kernel(
+        # xi: float, xj: float, lengthscale: float, sigma_f: float, sigma_n: float
+        xi: float, xj: float, lengthscale: float, smoothness: float, sigma_n: float
+    ) -> float:
+        """
+        Matern Kernel method.
+
+        :param xi, xj: The two x values to use as kernel inputs.
+        :param lengthscale: Lengthscale parameter. Defaults to 1.
+        :param smoothness: Smoothness parameter. Defaults to 1.
+        :param sigma_n: Noise variance parameter. Defaults to 0.1.
+
+        :return: Output k(xi,xj) given hyperparameters.
+        """
+        # Compute distance between points
+        d = np.sum(np.abs(xi - xj) / lengthscale)
+
+        # Compute kernel value
+        if np.isclose(d, 0):
+            k = 1 + sigma_n**2
+        else:
+            k = ((2**(1 - smoothness) / gamma(smoothness)) *
+                d**smoothness *
+                kv(smoothness, d) +
+                sigma_n**2 * np.isclose(xi, xj).all())
+
+        return k
+
+
+    @staticmethod
+    def periodic_kernel(
+        xi: float, xj: float, lengthscale: float, sigma_f: float, sigma_n: float
+    ) -> float:
+        """
+        Periodic Kernel method.
+
+        :param xi, xj: The two x values to use as kernel inputs.
+        :param lengthscale: Lengthscale parameter. Defaults to 1.
+        :param sigma_f: Signal variance parameter. Defaults to 1.
+        :param sigma_n: Noise variance parameter. Defaults to 0.1.
+
+        :return: Output k(xi,xj) given hyperparameters.
+        """
+        xi, xj = xi[np.newaxis], xj[np.newaxis]
+        return (
+            sigma_f**2 * 
+            np.exp(-2 * np.sin(np.pi * np.sum(np.abs(xi - xj)) / lengthscale)**2) +
             sigma_n**2 * np.isclose(xi, xj, rtol=1e-5).all()
         )
 
@@ -200,7 +273,7 @@ class GaussianProcess:
         :param X: Input points to define the fitted K matrix.
         :param y: Output values for the given X values.
         """
-        X = self._X_shape_check(X)
+        X, y = self._X_shape_check(X), self._X_shape_check(y)
         self.y = y
         self.X = X
         self.kernel_matrix(X, X)
@@ -236,74 +309,8 @@ class GaussianProcess:
         return ystar, vstar
 
     def _X_shape_check(self, X):
+        if isinstance(X, float):
+            X = np.array([X])
         if len(X.shape) == 1:
             X = X[:, np.newaxis]
         return X
-
-
-# %%
-if __name__ == "__main__":
-    os.chdir(os.path.dirname(os.path.realpath(__file__)))
-    instance = GaussianProcess()
-    xtrain, xtest = np.linspace(-7, 7, 10), np.linspace(-7,7,100)
-
-    #----------% Figure 2.2 %----------#
-
-    # Single prior trajectory to build posterior, draw three posterior trajectories (using Cholesky)
-    y1, _ = instance.get_prior_trajectories(X=xtrain, num_trajectories=1)
-    # Three trajectories using priors
-    y3, vprior = instance.get_prior_trajectories(X=xtest, num_trajectories=3)
-    # Fit prior trajectory to build posterior
-    instance.fit(X=xtrain, y=y1)
-    # Get 100 posterior trajectories for `true` averages
-    ymean, vmean = instance.get_posterior_trajectories(
-        X=xtest, 
-        num_trajectories=100, 
-        cholesky=True
-    )
-    # Get 3 posterior trajectories to plot
-    ypost, vpost = instance.get_posterior_trajectories(
-        X=xtest, 
-        num_trajectories=3, 
-        cholesky=True
-    )
-    # Plot Figure 2.2
-    fig22(xtrain, xtest, y1, y3, vprior, ypost, ymean, vmean)
-
-    #----------% Figure 2.5 %----------#
-    xtrain = npr.uniform(-7, 7, 20)
-    xtest = np.linspace(-7, 7, 100)
-    # Get prior trajectory common to all three instances below 
-    y1, _ = instance.get_prior_trajectories(X=xtrain, num_trajectories=1)
-    # Create instances with specific kernel parameters
-    inst25a = GaussianProcess(kernel_kwargs={"lengthscale":1, "sigma_f":1, "sigma_n":0.1})
-    inst25b = GaussianProcess(kernel_kwargs={"lengthscale":0.3, "sigma_f":1.08, "sigma_n":5e-05})
-    inst25c = GaussianProcess(kernel_kwargs={"lengthscale":3.0, "sigma_f":1.16, "sigma_n":0.29})
-    # Fit each instance using the prior trajectory and training inputs
-    inst25a.fit(xtrain, y1)
-    inst25b.fit(xtrain, y1)
-    inst25c.fit(xtrain, y1)
-    # Get single posterior trajectories for each of three configurations
-    y25a, v25a = inst25a.get_posterior_trajectories(X=xtest, num_trajectories=1, cholesky=True)
-    y25b, v25b = inst25b.get_posterior_trajectories(X=xtest, num_trajectories=1, cholesky=True)
-    y25c, v25c = inst25c.get_posterior_trajectories(X=xtest, num_trajectories=1, cholesky=True)
-    # Produce Figure 2.5
-    fig25(xtrain, y1, xtest, y25a, y25b, y25c, v25a, v25b, v25c, suptitle="fig25abc")
-    # One can improve the smoothness of l=3 results by averaging many draws (this seems to be done in RW 2006)
-    y25a, v25a = inst25a.get_posterior_trajectories(X=xtest, num_trajectories=100, cholesky=True)
-    y25b, v25b = inst25b.get_posterior_trajectories(X=xtest, num_trajectories=100, cholesky=True)
-    y25c, v25c = inst25c.get_posterior_trajectories(X=xtest, num_trajectories=100, cholesky=True)
-    # Second Figure 2.5
-    fig25(
-        xtrain, y1, xtest, 
-        np.mean(y25a,axis=1), np.mean(y25b, axis=1), np.mean(y25c,axis=1), 
-        v25a, v25b, v25c, 
-        suptitle="fig25abc_v2"
-    )
-
-    """
-    Note: Figure with lengthscale 3 appears to have less function noise in practice, as 0.89 suggests
-       close to unitary variance and the standard deviations ought to be larger than shown. A comparable
-       result can be achieved setting `sigma_n` to 0.29.
-    """
-# %%

@@ -1,0 +1,3 @@
+*.egg-info
+BayesOpt/__pycache__/
+BayesOpt/utils/__pycache__/

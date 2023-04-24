@@ -4,3 +4,8 @@ matplotlib
 plotly
 scipy
 tqdm
+joblib
+scikit-learn
+hyperopt
+bayesian-optimization
+smac

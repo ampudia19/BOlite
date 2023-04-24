@@ -14,11 +14,9 @@ BOLite is a small, illustrative library for Bayesian Optimization, designed for 
 
 ## Installation
 
-To install the BOlite package, run the following command:
+To install the BOlite package, run the following command in the root folder:
 
-\`\`\`
-pip install BOlite
-\`\`\`
+`pip install -e .`
 
 ## Usage
 
@@ -26,28 +24,22 @@ To use BOlite, follow these simple steps:
 
 1. Import the necessary classes:
 
-\`\`\`python
-from bolite.BayesOpt import BayesianOptimizer, GaussianProcess
-\`\`\`
+`python from bolite.BayesOpt import BayesianOptimizer, GaussianProcess`
 
 2. Define your objective function:
 
-\`\`\`python
+```
 def objective_function(x):
     return -x**2 + 4*x - 4
-\`\`\`
+```
 
 3. Set up the Bayesian Optimization object:
 
-\`\`\`python
-optimizer = BayesianOptimizer(objective_function, bounds=[(0, 4)])
-\`\`\`
+`optimizer = BayesianOptimizer(objective_function, bounds=[(0, 4)])`
 
 4. Run the optimization:
 
-\`\`\`python
-optimizer.optimize(iterations=10)
-\`\`\`
+`optimizer.optimize(iterations=10)`
 
 ## Examples
 

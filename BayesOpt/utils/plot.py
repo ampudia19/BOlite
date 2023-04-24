@@ -44,7 +44,6 @@ def fig22(xtrain, xtest, y1, y3, vprior, ypost, ymean, vmean):
         axis.set_ylim(-3.2, 3.2)
         axis.axhline(y=0, color='gray', linestyle='--', linewidth=1)
     ax[1].scatter(xtrain, y1, marker="^", s=80, c="r")
-    fig.savefig("figures/fig22ab.png", facecolor="white", transparent=False, dpi=500)
     plt.show()
 
 ######## Figure 2.5
@@ -60,7 +59,6 @@ def fig25(xtrain, y1, xtest, y25a, y25b, y25c, v25a, v25b, v25c, suptitle="fig25
     subfig25(ax0, xtrain, y1, xtest, y25a, v25a, "$lengthscale=1$")
     subfig25(ax1, xtrain, y1, xtest, y25c, v25c, "$lengthscale=3$")
     subfig25(ax2, xtrain, y1, xtest, y25b, v25b, "$lengthscale=0.3$")
-    plt.savefig(f"figures/{suptitle}.png", facecolor="white", transparent=False, dpi=500)
     plt.show()
 
 def subfig25(axis, xtrain, y1, xtest, y, v, title):
@@ -178,5 +176,4 @@ def main_figure(output_dict):
     for axis in ax:
         axis.set_ylabel("Mean Squared Error")
         axis.set_xlabel("Function evaluation")
-    plt.savefig("figures/BO_figure.png", dpi=400)
     plt.show()
